@@ -174,6 +174,9 @@ jobs:
     needs: publish
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      packages: read # el token temporal del job permite al VPS descargar las imágenes privadas
     steps:
       - uses: appleboy/ssh-action@v1
         with:
@@ -183,8 +186,11 @@ jobs:
           script: |
             set -e
             cd ~/reto-qr
+            test -f .env || { echo "Falta ~/reto-qr/.env en el VPS (cp .env.prod.example .env)"; exit 1; }
             git pull --ff-only
             export IMAGE_TAG=${{ github.sha }}
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker logout ghcr.io
             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build --wait
             docker image prune -f
