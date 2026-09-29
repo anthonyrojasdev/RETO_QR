@@ -1,0 +1,167 @@
+# Configuración declarativa de Kong (modo db-less).
+#
+# entrypoint.sh reemplaza __JWT_SECRET__, __REDIS_PASSWORD__ y __CORS_ORIGIN__
+# con variables de entorno, para no guardar secretos en el repositorio.
+#
+# Kong centraliza lo transversal: autenticación (JWT), autorización por rol (ACL),
+# límite de peticiones (Redis), CORS, límite de tamaño, X-Request-ID y logs.
+# Los servicios no publican puertos: solo se llega a ellos a través de Kong.
+_format_version: "3.0"
+_transform: true
+
+# --- Un consumer por rol. El claim "iss" del JWT indica el consumer. ---------
+consumers:
+  - username: role-admin
+    jwt_secrets:
+      - key: qr-admin
+        algorithm: HS256
+        secret: "__JWT_SECRET__"
+    acls:
+      - group: admin
+
+  - username: role-analyst
+    jwt_secrets:
+      - key: qr-analyst
+        algorithm: HS256
+        secret: "__JWT_SECRET__"
+    acls:
+      - group: analyst
+
+services:
+  # --- Login: público, con un límite estricto por IP contra fuerza bruta. ----
+  - name: auth-api
+    url: http://auth-api:4000/auth/login
+    routes:
+      - name: auth-login
+        paths: ["/api/auth/login"]
+        methods: [POST, OPTIONS]
+        strip_path: true
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 10
+              limit_by: ip
+              policy: redis
+              redis:
+                host: redis
+                port: 6379
+                password: "__REDIS_PASSWORD__"
+                timeout: 2000
+              fault_tolerant: true
+
+  # --- QR API (Go): POST /api/qr y GET /api/qr/history ------------------------
+  # strip_path quita /api/qr y lo que sigue se agrega a /qr: /api/qr/history → /qr/history
+  - name: qr-api
+    url: http://qr-api:8080/qr
+    connect_timeout: 3000
+    read_timeout: 15000
+    write_timeout: 15000
+    retries: 0 # un POST no se reintenta desde el gateway
+    routes:
+      - name: qr
+        paths: ["/api/qr"]
+        methods: [GET, POST, OPTIONS]
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: [exp]
+              maximum_expiration: 3900 # 1 h de vigencia + margen por desfase de relojes
+              run_on_preflight: false
+          - name: acl
+            config:
+              allow: [admin, analyst]
+          - name: rate-limiting
+            config:
+              minute: 60
+              limit_by: consumer
+              policy: redis
+              redis:
+                host: redis
+                port: 6379
+                password: "__REDIS_PASSWORD__"
+                timeout: 2000
+              fault_tolerant: true
+
+  # --- Stats API (Node): acceso directo solo para administradores. ------------
+  # El flujo normal es /api/qr, donde la QR API llama internamente a esta API.
+  - name: stats-api
+    url: http://stats-api:3000/statistics
+    connect_timeout: 3000
+    read_timeout: 10000
+    write_timeout: 10000
+    retries: 0
+    routes:
+      - name: statistics
+        paths: ["/api/statistics"]
+        methods: [POST, OPTIONS]
+        strip_path: true
+        plugins:
+          - name: jwt
+            config:
+              claims_to_verify: [exp]
+              maximum_expiration: 3900
+              run_on_preflight: false
+          - name: acl
+            config:
+              allow: [admin]
+          - name: rate-limiting
+            config:
+              minute: 60
+              limit_by: consumer
+              policy: redis
+              redis:
+                host: redis
+                port: 6379
+                password: "__REDIS_PASSWORD__"
+                timeout: 2000
+              fault_tolerant: true
+
+  # --- Documentación OpenAPI (pública, solo lectura). -------------------------
+  # Abrir /api/docs/qr/index.html y /api/docs/stats/ (con la barra final).
+  - name: qr-api-docs
+    url: http://qr-api:8080/docs
+    routes:
+      - name: qr-docs
+        paths: ["/api/docs/qr"]
+        methods: [GET]
+        strip_path: true
+
+  - name: stats-api-docs
+    url: http://stats-api:3000/docs
+    routes:
+      - name: stats-docs
+        paths: ["/api/docs/stats"]
+        methods: [GET]
+        strip_path: true
+
+# --- Plugins globales --------------------------------------------------------
+plugins:
+  # Asigna un X-Request-ID a cada petición; los servicios lo propagan y lo registran.
+  - name: correlation-id
+    config:
+      header_name: X-Request-ID
+      generator: uuid
+      echo_downstream: true
+
+  - name: cors
+    config:
+      origins: ["__CORS_ORIGIN__"]
+      methods: [GET, POST, OPTIONS]
+      headers: [Authorization, Content-Type, X-Request-ID]
+      exposed_headers: [X-Request-ID, X-Cache, Retry-After, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset]
+      credentials: false
+      max_age: 3600
+
+  # Rechaza cuerpos mayores a 1 MB antes de que lleguen a los servicios.
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 1
+      size_unit: megabytes
+
+  # Log estructurado (JSON) de cada petición, sin el token JWT.
+  - name: file-log
+    config:
+      path: /dev/stdout
+      custom_fields_by_lua:
+        request.headers.authorization: "return nil"

@@ -1,0 +1,16 @@
+# Despliegue en la nube: usa las imágenes publicadas por CI en GHCR en lugar de compilar.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build --wait
+#
+# Requiere en .env: GHCR_OWNER (usuario u organización de GitHub, en minúsculas).
+# IMAGE_TAG elige la versión (por defecto latest; el pipeline usa el SHA del commit).
+services:
+  qr-api:
+    image: ghcr.io/${GHCR_OWNER:?Define GHCR_OWNER en .env}/reto-qr-qr-api:${IMAGE_TAG:-latest}
+  stats-api:
+    image: ghcr.io/${GHCR_OWNER}/reto-qr-stats-api:${IMAGE_TAG:-latest}
+  auth-api:
+    image: ghcr.io/${GHCR_OWNER}/reto-qr-auth-api:${IMAGE_TAG:-latest}
+  frontend:
+    image: ghcr.io/${GHCR_OWNER}/reto-qr-frontend:${IMAGE_TAG:-latest}

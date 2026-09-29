@@ -1,0 +1,122 @@
+# Entorno completo: Kong + QR API (Go) + Stats API (Node) + Auth API (Node)
+# + PostgreSQL + Redis + frontend (React).
+#
+#   cp .env.example .env
+#   docker compose up -d --build --wait
+#
+# Solo Kong (8000) y el frontend (5173) publican puertos. El resto se comunica
+# por la red interna de Docker y no es accesible desde fuera.
+name: reto-qr
+
+services:
+  kong:
+    image: kong:3.9.3
+    entrypoint: ["/bin/sh", "/kong/entrypoint.sh"]
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /tmp/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 127.0.0.1:8001 # Admin API solo dentro del contenedor
+      KONG_PROXY_ACCESS_LOG: "off" # el plugin file-log escribe un log JSON por petición
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ACCESS_LOG: "off"
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_HEADERS: latency_tokens # no revela la versión de Kong (Server/Via)
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Define REDIS_PASSWORD en .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    volumes:
+      - ./gateway:/kong:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      qr-api: { condition: service_healthy }
+      stats-api: { condition: service_healthy }
+      auth-api: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  qr-api:
+    build: ./services/qr-api
+    environment:
+      STATS_API_URL: http://stats-api:3000
+      STATS_API_TIMEOUT: 3s
+      STATS_API_RETRIES: "1"
+      MAX_MATRIX_DIMENSION: "100"
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CACHE_TTL: 10m
+      DATABASE_URL: postgres://qr_app:${QR_DB_PASSWORD:?Define QR_DB_PASSWORD en .env}@postgres:5432/qr?sslmode=disable
+    depends_on:
+      stats-api: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  stats-api:
+    build: ./services/stats-api
+    environment:
+      DIAGONAL_TOLERANCE: "1e-10"
+    restart: unless-stopped
+
+  auth-api:
+    build: ./services/auth-api
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env}
+      JWT_TTL_SECONDS: "3600"
+      AUTH_USERS: ${AUTH_USERS:?Define AUTH_USERS en .env}
+      DATABASE_URL: postgres://auth_app:${AUTH_DB_PASSWORD:?Define AUTH_DB_PASSWORD en .env}@postgres:5432/auth
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD:?Define AUTH_DB_PASSWORD en .env}
+      QR_DB_PASSWORD: ${QR_DB_PASSWORD:?Define QR_DB_PASSWORD en .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      # Por TCP: durante la inicialización (init.sh) PostgreSQL solo escucha por socket,
+      # así los servicios no arrancan antes de que existan sus bases de datos.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d qr"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Caché y contadores de rate limiting: datos efímeros, sin persistencia en disco.
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD:?Define REDIS_PASSWORD en .env}
+      --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      kong: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

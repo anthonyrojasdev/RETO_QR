@@ -1,0 +1,252 @@
+basePath: /api
+definitions:
+  history.Entry:
+    properties:
+      Q:
+        items:
+          items:
+            format: float64
+            type: number
+          type: array
+        type: array
+      R:
+        items:
+          items:
+            format: float64
+            type: number
+          type: array
+        type: array
+      cached:
+        description: Cached indica si el resultado se obtuvo del caché de Redis.
+        example: false
+        type: boolean
+      columns:
+        example: 3
+        type: integer
+      createdAt:
+        example: "2026-09-28T18:30:00Z"
+        type: string
+      id:
+        example: 42
+        type: integer
+      matrix:
+        items:
+          items:
+            format: float64
+            type: number
+          type: array
+        type: array
+      rows:
+        example: 2
+        type: integer
+      statistics:
+        $ref: '#/definitions/stats.Statistics'
+    type: object
+  httpapi.ErrorBody:
+    properties:
+      code:
+        description: Code es un identificador estable del tipo de error.
+        example: INVALID_MATRIX
+        type: string
+      message:
+        description: Message explica el error en lenguaje natural.
+        example: 'la matriz debe ser rectangular: la fila 2 tiene 1 columnas y la
+          fila 1 tiene 3'
+        type: string
+      requestId:
+        description: RequestID permite encontrar la petición en los logs.
+        example: 3f1b6c2e-7a55-4a8e-9b1d-0c5e2f7a9d10
+        type: string
+    type: object
+  httpapi.ErrorResponse:
+    properties:
+      error:
+        $ref: '#/definitions/httpapi.ErrorBody'
+    type: object
+  httpapi.FactorizeRequest:
+    properties:
+      matrix:
+        description: Matrix es la matriz rectangular A (m×n) a factorizar.
+        items:
+          items:
+            format: float64
+            type: number
+          type: array
+        type: array
+    type: object
+  httpapi.FactorizeResponse:
+    properties:
+      Q:
+        description: Q es la matriz ortogonal (m×m).
+        items:
+          items:
+            format: float64
+            type: number
+          type: array
+        type: array
+      R:
+        description: R es la matriz triangular superior (m×n), con diagonal no negativa.
+        items:
+          items:
+            format: float64
+            type: number
+          type: array
+        type: array
+      statistics:
+        allOf:
+        - $ref: '#/definitions/stats.Statistics'
+        description: Statistics son las estadísticas calculadas por la Stats API sobre
+          Q y R.
+    type: object
+  httpapi.GatewayError:
+    properties:
+      message:
+        example: Unauthorized
+        type: string
+    type: object
+  httpapi.HistoryResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/history.Entry'
+        type: array
+    type: object
+  stats.MatrixSummary:
+    properties:
+      columns:
+        example: 3
+        type: integer
+      isDiagonal:
+        example: false
+        type: boolean
+      rows:
+        example: 2
+        type: integer
+    type: object
+  stats.Statistics:
+    properties:
+      average:
+        description: Average es el promedio de todos los elementos de Q y R.
+        example: 2.013046
+        type: number
+      count:
+        description: Count es la cantidad de elementos analizados.
+        example: 10
+        type: integer
+      isAnyDiagonal:
+        description: IsAnyDiagonal indica si al menos una de las matrices es diagonal.
+        example: false
+        type: boolean
+      matrices:
+        additionalProperties:
+          $ref: '#/definitions/stats.MatrixSummary'
+        description: Matrices resume cada matriz por nombre ("Q" y "R").
+        type: object
+      max:
+        description: Max es el valor máximo entre todos los elementos de Q y R.
+        example: 6.548462
+        type: number
+      min:
+        description: Min es el valor mínimo entre todos los elementos de Q y R.
+        example: -0.242536
+        type: number
+      sum:
+        description: Sum es la suma de todos los elementos de Q y R.
+        example: 20.130457
+        type: number
+    type: object
+info:
+  contact: {}
+  description: |-
+    Factorización QR de matrices rectangulares. Tras factorizar, envía Q y R a la Stats API (Node.js) y devuelve ambos resultados.
+    Se expone a través de Kong en /api/qr y requiere un JWT (obtenlo con POST /api/auth/login).
+  title: QR API
+  version: "1.0"
+paths:
+  /qr:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Recibe una matriz rectangular A (m×n), calcula A = Q·R (Q ortogonal m×m, R triangular superior m×n) y envía Q y R a la Stats API. Devuelve Q, R y las estadísticas.
+        Si la misma matriz ya se calculó, responde desde el caché de Redis (cabecera X-Cache: HIT). Cada cálculo se guarda en el historial del usuario.
+      parameters:
+      - description: Matriz a factorizar
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/httpapi.FactorizeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Cache:
+              description: HIT si la respuesta salió del caché, MISS si se calculó
+              type: string
+          schema:
+            $ref: '#/definitions/httpapi.FactorizeResponse'
+        "400":
+          description: JSON o matriz inválidos
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "401":
+          description: Token ausente, inválido o expirado (responde Kong)
+          schema:
+            $ref: '#/definitions/httpapi.GatewayError'
+        "415":
+          description: El cuerpo no es application/json
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "429":
+          description: Límite de peticiones superado (responde Kong)
+          schema:
+            $ref: '#/definitions/httpapi.GatewayError'
+        "502":
+          description: La Stats API no respondió correctamente
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Factorización QR de una matriz
+      tags:
+      - qr
+  /qr/history:
+    get:
+      description: Devuelve las últimas factorizaciones del usuario del token, de
+        la más reciente a la más antigua.
+      parameters:
+      - default: 10
+        description: Cantidad máxima de resultados (1-50)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpapi.HistoryResponse'
+        "401":
+          description: Token ausente, inválido o expirado (responde Kong)
+          schema:
+            $ref: '#/definitions/httpapi.GatewayError'
+        "503":
+          description: El historial no está disponible
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Historial de factorizaciones
+      tags:
+      - qr
+securityDefinitions:
+  BearerAuth:
+    description: Escribe "Bearer <token>".
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

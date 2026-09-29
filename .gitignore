@@ -1,0 +1,15 @@
+# Secretos
+.env
+
+# Dependencias y resultados de compilación
+node_modules/
+dist/
+coverage/
+*.test
+coverage.out
+
+# Editores y sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
