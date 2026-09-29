@@ -41,6 +41,9 @@ function mockGateway({ qrStatus = 200 } = {}) {
     if (url.endsWith('/api/qr')) {
       return json({ message: 'Unauthorized' }, qrStatus);
     }
+    if (url.includes('/api/qr/history') && url.includes('user=analyst')) {
+      return json({ items: [{ ...historyEntry, id: 8, cached: false }] });
+    }
     if (url.includes('/api/qr/history') && url.includes('scope=all')) {
       return json({ items: [historyEntry] });
     }
@@ -189,5 +192,35 @@ describe('App', () => {
     const call = fetchMock.mock.calls.find(([url]) => url.endsWith('/api/statistics'));
     expect(call?.[1]?.headers).toMatchObject({ Authorization: 'Bearer token-admin' });
     expect(JSON.parse(String(call?.[1]?.body))).toEqual({ Q: [[1, 0], [0, 1]], R: [[2, 1], [0, 3]] });
+  });
+
+  it('admin cambia el historial al de todo el equipo o al de un usuario; analyst no puede', async () => {
+    const fetchMock = mockGateway();
+    const user = userEvent.setup();
+    renderApp();
+    await loginAs(user, 'admin', 'Admin123!');
+
+    const history = await screen.findByRole('region', { name: 'Historial' });
+    const select = within(history).getByLabelText('Historial de');
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'analyst' })).toBeInTheDocument());
+
+    await user.selectOptions(select, 'Todo el equipo');
+    expect(await within(history).findByText('analyst', { selector: '.author' })).toBeInTheDocument();
+
+    await user.selectOptions(select, 'analyst');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => url.includes('user=analyst'))).toBe(true));
+    await user.click(await within(history).findByTitle('Volver a abrir este cálculo'));
+    expect(await screen.findByText('Calculado')).toBeInTheDocument();
+    expect(screen.getByLabelText('Matriz A')).toHaveValue('1 2 3\n4 5 6');
+  });
+
+  it('analyst ve solo su historial, sin selector', async () => {
+    mockGateway();
+    const user = userEvent.setup();
+    renderApp();
+    await loginAsAnalyst(user);
+
+    const history = await screen.findByRole('region', { name: 'Tu historial' });
+    expect(within(history).queryByLabelText('Historial de')).not.toBeInTheDocument();
   });
 });

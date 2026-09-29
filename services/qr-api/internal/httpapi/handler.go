@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -132,14 +133,16 @@ func (h *Handler) Factorize(c *fiber.Ctx) error {
 //	@Summary		Historial de factorizaciones
 //	@Description	Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.
 //	@Description	Con scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.
+//	@Description	Con user=<nombre> (solo rol admin) devuelve las de ese usuario.
 //	@Tags			qr
 //	@Produce		json
 //	@Param			limit	query		int		false	"Cantidad máxima de resultados (1-50)"	default(10)
 //	@Param			scope	query		string	false	"mine (por defecto) o all (solo admin)"	Enums(mine, all)
+//	@Param			user	query		string	false	"Historial de otro usuario (solo admin); no se combina con scope=all"
 //	@Success		200		{object}	HistoryResponse
-//	@Failure		400		{object}	ErrorResponse	"scope inválido"
+//	@Failure		400		{object}	ErrorResponse	"scope inválido o combinado con user"
 //	@Failure		401		{object}	GatewayError	"Token ausente, inválido o expirado (responde Kong)"
-//	@Failure		403		{object}	ErrorResponse	"scope=all requiere el rol admin"
+//	@Failure		403		{object}	ErrorResponse	"scope=all o el historial de otro usuario requieren el rol admin"
 //	@Failure		503		{object}	ErrorResponse	"El historial no está disponible"
 //	@Security		BearerAuth
 //	@Router			/qr/history [get]
@@ -156,6 +159,16 @@ func (h *Handler) History(c *fiber.Ctx) error {
 	if scope == "all" && !user.IsAdmin() {
 		return newAPIError(fiber.StatusForbidden, "FORBIDDEN", "solo un administrador puede ver el historial de todos los usuarios")
 	}
+	target := strings.TrimSpace(c.Query("user"))
+	if target != "" && scope == "all" {
+		return newAPIError(fiber.StatusBadRequest, "INVALID_SCOPE", "usa scope=all o user, no ambos")
+	}
+	if target != "" && target != user.Username && !user.IsAdmin() {
+		return newAPIError(fiber.StatusForbidden, "FORBIDDEN", "solo un administrador puede ver el historial de otro usuario")
+	}
+	if target == "" {
+		target = user.Username
+	}
 
 	limit := c.QueryInt("limit", defaultHistoryLimit)
 	limit = max(1, min(limit, maxHistoryLimit))
@@ -166,7 +179,12 @@ func (h *Handler) History(c *fiber.Ctx) error {
 	if scope == "all" {
 		entries, err = h.history.ListAll(ctx, limit)
 	} else {
-		entries, err = h.history.List(ctx, user.Username, limit)
+		entries, err = h.history.List(ctx, target, limit)
+		if target != user.Username {
+			for i := range entries {
+				entries[i].Username = target // el admin ve de quién es cada cálculo
+			}
+		}
 	}
 	if err != nil {
 		return h.historyUnavailable(c, err)
