@@ -251,6 +251,7 @@ paths:
       description: |-
         Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.
         Con scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.
+        Con user=<nombre> (solo rol admin) devuelve las de ese usuario.
       parameters:
       - default: 10
         description: Cantidad máxima de resultados (1-50)
@@ -264,6 +265,10 @@ paths:
         in: query
         name: scope
         type: string
+      - description: Historial de otro usuario (solo admin); no se combina con scope=all
+        in: query
+        name: user
+        type: string
       produces:
       - application/json
       responses:
@@ -272,7 +277,7 @@ paths:
           schema:
             $ref: '#/definitions/httpapi.HistoryResponse'
         "400":
-          description: scope inválido
+          description: scope inválido o combinado con user
           schema:
             $ref: '#/definitions/httpapi.ErrorResponse'
         "401":
@@ -280,7 +285,7 @@ paths:
           schema:
             $ref: '#/definitions/httpapi.GatewayError'
         "403":
-          description: scope=all requiere el rol admin
+          description: scope=all o el historial de otro usuario requieren el rol admin
           schema:
             $ref: '#/definitions/httpapi.ErrorResponse'
         "503":

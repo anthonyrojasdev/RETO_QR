@@ -499,3 +499,32 @@ func TestUsageReturnsEmptyListAndHandlesUnavailableHistory(t *testing.T) {
 		t.Fatalf("estado = %d, se esperaba 503", resp.StatusCode)
 	}
 }
+
+func TestHistoryOfAnotherUserIsOnlyForAdmins(t *testing.T) {
+	env := newTestEnv()
+	env.history.entries = []history.Entry{{ID: 5, Rows: 2, Columns: 2}}
+
+	if resp := env.do(getAs("/qr/history?user=maria", bearer("ana"))); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("analyst pidiendo a otro: estado = %d, se esperaba 403", resp.StatusCode)
+	}
+
+	resp := env.do(getAs("/qr/history?user=ana", bearer("ana")))
+	if resp.StatusCode != http.StatusOK || env.history.gotUser != "ana" {
+		t.Fatalf("pedir el propio historial con user debe funcionar: estado %d, usuario %q", resp.StatusCode, env.history.gotUser)
+	}
+	if body := decode[HistoryResponse](t, resp); body.Items[0].Username != "" {
+		t.Error("el historial propio no incluye el autor")
+	}
+
+	resp = env.do(getAs("/qr/history?user=maria", bearerWithRole("root", "admin")))
+	if resp.StatusCode != http.StatusOK || env.history.gotUser != "maria" {
+		t.Fatalf("admin: estado %d, usuario consultado %q", resp.StatusCode, env.history.gotUser)
+	}
+	if body := decode[HistoryResponse](t, resp); body.Items[0].Username != "maria" {
+		t.Errorf("admin debe ver el autor de cada cálculo: %+v", body.Items)
+	}
+
+	if resp := env.do(getAs("/qr/history?user=maria&scope=all", bearerWithRole("root", "admin"))); resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("scope=all con user: estado = %d, se esperaba 400", resp.StatusCode)
+	}
+}

@@ -101,6 +101,7 @@ export function Dashboard({ session }: { session: Session }) {
               <MatrixEditor value={matrixText} onChange={setMatrixText} onSubmit={handleSubmit} loading={loading} />
               <HistoryPanel
                 token={session.token}
+                role={session.role}
                 refreshKey={historyVersion}
                 onSelect={openEntry}
                 onUnauthorized={handleUnauthorized}
