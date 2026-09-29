@@ -11,12 +11,11 @@ if ! command -v docker >/dev/null; then
 fi
 systemctl enable --now docker
 
-# Firewall: solo SSH y web. (Docker se salta ufw con puertos publicados, pero el compose de
-# producción solo publica 80/443.)
+# Firewall: solo SSH y HTTP. (Docker se salta ufw con puertos publicados, pero el compose de
+# producción solo publica el 80.)
 if command -v ufw >/dev/null || apt-get install -y ufw; then
   ufw allow 22/tcp
   ufw allow 80/tcp
-  ufw allow 443/tcp
   ufw --force enable
 fi
 

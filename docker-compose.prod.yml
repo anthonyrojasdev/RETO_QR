@@ -1,4 +1,4 @@
-# Despliegue en un VPS: usa las imágenes publicadas por CI en GHCR y pone Caddy delante con HTTPS.
+# Despliegue en un VPS: usa las imágenes publicadas por CI en GHCR y pone Caddy delante .
 #
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build --wait
@@ -6,8 +6,8 @@
 # Requiere en .env: GHCR_OWNER, DOMAIN, PUBLIC_API_URL y CORS_ORIGIN (ver .env.prod.example).
 # IMAGE_TAG elige la versión (por defecto latest; el pipeline usa el SHA del commit).
 #
-# Solo Caddy publica puertos (80/443). Kong y el frontend quedan en la red interna:
-#   https://DOMAIN/api/*  → Kong      https://DOMAIN/*  → frontend
+# Solo Caddy publica el puerto 80. Kong y el frontend quedan en la red interna:
+#   http://DOMAIN/api/*  → Kong      http://DOMAIN/*  → frontend
 x-logging: &logging
   driver: json-file
   options:
@@ -21,11 +21,10 @@ services:
       DOMAIN: ${DOMAIN:?Define DOMAIN en .env}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data # certificados: no borrar (límites de Let's Encrypt)
+      - caddy-data:/data
       - caddy-config:/config
     ports:
       - "80:80"
-      - "443:443"
     depends_on:
       kong: { condition: service_healthy }
       frontend: { condition: service_started }

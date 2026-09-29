@@ -174,7 +174,7 @@ tienen healthchecks, apagado ordenado e imágenes mínimas sin usuario root (Go 
 ```
 .
 ├── docker-compose.yml          # entorno completo
-├── docker-compose.prod.yml     # VPS: imágenes de GHCR + Caddy (HTTPS)
+├── docker-compose.prod.yml     # VPS: imágenes de GHCR + Caddy
 ├── .env.prod.example           # plantilla de producción
 ├── deploy/                     # Caddyfile, bootstrap del VPS y backups
 ├── .env.example                # configuración y secretos de desarrollo
@@ -212,14 +212,14 @@ La prueba E2E de rate limit bloquea el login por un minuto; si repites la suite,
 4. En `main`: publica las imágenes en GitHub Container Registry (`ghcr.io/<owner>/reto-qr-*`).
 5. En `main`, si está activado: despliega por SSH en una VM.
 
-### Despliegue en un VPS (Ubuntu/Debian, con HTTPS)
+### Despliegue en un VPS (Ubuntu/Debian, por IP y HTTP)
 
-`docker-compose.prod.yml` añade Caddy, que emite el certificado HTTPS solo y es lo único que publica puertos
-(80/443): `https://DOMAIN/api/*` va a Kong y el resto al frontend. Sin dominio propio se puede usar
-`<ip-con-guiones>.sslip.io` (p. ej. `169-58-188-130.sslip.io`).
+`docker-compose.prod.yml` añade Caddy, que es lo único que publica puerto (80): `http://IP/api/*` va a Kong y
+el resto al frontend. Sin dominio no hay HTTPS válido; cuando tengas uno, sigue las instrucciones del
+comentario en `deploy/Caddyfile` (quitar `http://`, cambiar `DOMAIN`, `PUBLIC_API_URL` y `CORS_ORIGIN`, abrir 443).
 
 ```bash
-# 1. En el VPS, como root: instala Docker, abre 22/80/443 y clona el repo en ~/reto-qr
+# 1. En el VPS, como root: instala Docker, abre 22/80 y clona el repo en ~/reto-qr
 curl -fsSL https://raw.githubusercontent.com/<owner>/RETO_QR/main/deploy/bootstrap.sh -o bootstrap.sh
 bash bootstrap.sh https://github.com/<owner>/RETO_QR.git
 
@@ -236,7 +236,7 @@ Si los paquetes de GHCR son privados, haz antes `docker login ghcr.io` con un to
 (o vuélvelos públicos en GitHub → Packages).
 
 Para el despliegue automático, define en el repositorio la variable `DEPLOY_ENABLED=true`, la variable
-`PUBLIC_API_URL` (la misma URL `https://DOMAIN` que en `.env`; se compila dentro del frontend), el entorno
+`PUBLIC_API_URL` (la misma URL `http://<IP>` que en `.env`; se compila dentro del frontend), el entorno
 `production` y los secretos `DEPLOY_HOST`, `DEPLOY_USER` y `DEPLOY_SSH_KEY`.
 
 ## Desarrollo sin Docker
