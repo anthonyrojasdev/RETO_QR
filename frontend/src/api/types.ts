@@ -42,11 +42,28 @@ export interface FactorizeResult extends FactorizeResponse {
 /** Elemento de GET /api/qr/history. */
 export interface HistoryEntry extends FactorizeResponse {
   id: number;
+  /** Autor del cálculo; solo viene en el historial de todos (scope=all, admin). */
+  username?: string;
   createdAt: string;
   rows: number;
   columns: number;
   matrix: Matrix;
   cached: boolean;
+}
+
+/** Actividad de un usuario (GET /api/qr/usage, solo admin). */
+export interface UserUsage {
+  username: string;
+  count: number;
+  cacheHits: number;
+  lastAt: string;
+}
+
+/** Resumen de uso del servicio (GET /api/qr/usage, solo admin). */
+export interface Usage {
+  total: number;
+  cacheHits: number;
+  users: UserUsage[];
 }
 
 /** Respuesta de POST /api/auth/login. */

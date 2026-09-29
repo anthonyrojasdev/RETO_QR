@@ -122,3 +122,11 @@ export function verifyFactorization(a: Matrix, q: Matrix, r: Matrix) {
     orthogonalityError: maxAbsDifference(multiply(transpose(q), q), identity(q.length)),
   };
 }
+
+/**
+ * Matriz aleatoria de enteros en [-range, range]. random se inyecta en las pruebas.
+ */
+export function randomMatrix(rows: number, columns: number, range = 9, random: () => number = Math.random): Matrix {
+  return Array.from({ length: rows }, () =>
+    Array.from({ length: columns }, () => Math.round((random() * 2 - 1) * range)));
+}

@@ -113,6 +113,23 @@ describe('factorización QR (Kong → Go → Node)', () => {
     assert.ok(!adminHistory.json.items.some((item) => JSON.stringify(item.matrix) === JSON.stringify(matrix)),
       'un usuario no debe ver el historial de otro');
   });
+
+  test('admin ve la actividad de todos los usuarios; analyst no → 403', async () => {
+    const matrix = [[3, Date.now() % 97], [2, 5]];
+    await call('/api/qr', { method: 'POST', body: { matrix }, token: analystToken });
+
+    const all = await call('/api/qr/history?scope=all&limit=50', { token: adminToken });
+    assert.equal(all.status, 200);
+    const entry = all.json.items.find((item) => JSON.stringify(item.matrix) === JSON.stringify(matrix));
+    assert.equal(entry?.username, 'analyst');
+
+    const usage = await call('/api/qr/usage', { token: adminToken });
+    assert.equal(usage.status, 200);
+    assert.ok(usage.json.users.find((u) => u.username === 'analyst')?.count >= 1);
+
+    assert.equal((await call('/api/qr/history?scope=all', { token: analystToken })).status, 403);
+    assert.equal((await call('/api/qr/usage', { token: analystToken })).status, 403);
+  });
 });
 
 describe('autorización por rol (ACL de Kong)', () => {

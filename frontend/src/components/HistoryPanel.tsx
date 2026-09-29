@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '../api/client';
 import { fetchHistory } from '../api/endpoints';
 import type { HistoryEntry } from '../api/types';
+import { formatRelative } from '../lib/export';
 import { formatNumber } from '../lib/matrix';
 
 interface Props {
@@ -37,30 +38,25 @@ export function HistoryPanel({ token, refreshKey, onSelect, onUnauthorized }: Pr
   }, [token, refreshKey, onUnauthorized]);
 
   return (
-    <section className="card" aria-labelledby="history-title">
-      <div className="card-header">
-        <h2 id="history-title">Historial</h2>
-        <span className="muted small">PostgreSQL</span>
+    <section className="panel" aria-labelledby="history-title">
+      <div className="panel-head">
+        <h2 id="history-title" className="eyebrow">Tu historial</h2>
+        <span className="dim">PostgreSQL</span>
       </div>
 
-      {state.status === 'loading' && <p className="muted small">Cargando…</p>}
-      {state.status === 'error' && <p className="muted small">{state.message}</p>}
+      {state.status === 'loading' && <p className="note">Cargando…</p>}
+      {state.status === 'error' && <p className="note">{state.message}</p>}
       {state.status === 'ready' && state.items.length === 0 && (
-        <p className="muted small">Aún no hay cálculos. Los que hagas aparecerán aquí.</p>
+        <p className="note">Aún no hay cálculos. Los que hagas aparecerán aquí.</p>
       )}
       {state.status === 'ready' && state.items.length > 0 && (
         <ul className="history">
           {state.items.map((entry) => (
             <li key={entry.id}>
-              <button type="button" onClick={() => onSelect(entry)}>
-                <span>
-                  <strong>{entry.rows}×{entry.columns}</strong>
-                  <span className="muted small"> · {new Date(entry.createdAt).toLocaleString('es')}</span>
-                </span>
-                <span className="muted small">
-                  máx {formatNumber(entry.statistics.max, 2)} · mín {formatNumber(entry.statistics.min, 2)}
-                  {entry.cached && <span className="tag tag-yes">caché</span>}
-                </span>
+              <button type="button" onClick={() => onSelect(entry)} title="Volver a abrir este cálculo">
+                <span className="mono">{entry.rows}×{entry.columns}</span>
+                <span className="dim mono">máx {formatNumber(entry.statistics.max, 2)}</span>
+                <span className="dim">{formatRelative(entry.createdAt)}{entry.cached ? ' · caché' : ''}</span>
               </button>
             </li>
           ))}

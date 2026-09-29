@@ -97,7 +97,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.",
+                "description": "Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.\nCon scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.",
                 "produces": [
                     "application/json"
                 ],
@@ -112,6 +112,16 @@ const docTemplate = `{
                         "description": "Cantidad máxima de resultados (1-50)",
                         "name": "limit",
                         "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "mine",
+                            "all"
+                        ],
+                        "type": "string",
+                        "description": "mine (por defecto) o all (solo admin)",
+                        "name": "scope",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -121,10 +131,65 @@ const docTemplate = `{
                             "$ref": "#/definitions/httpapi.HistoryResponse"
                         }
                     },
+                    "400": {
+                        "description": "scope inválido",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorResponse"
+                        }
+                    },
                     "401": {
                         "description": "Token ausente, inválido o expirado (responde Kong)",
                         "schema": {
                             "$ref": "#/definitions/httpapi.GatewayError"
+                        }
+                    },
+                    "403": {
+                        "description": "scope=all requiere el rol admin",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "El historial no está disponible",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/qr/usage": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cantidad de factorizaciones por usuario, cuántas salieron del caché de Redis y la fecha de la última. Solo para el rol admin.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "qr"
+                ],
+                "summary": "Uso del servicio por usuario",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/history.Usage"
+                        }
+                    },
+                    "401": {
+                        "description": "Token ausente, inválido o expirado (responde Kong)",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.GatewayError"
+                        }
+                    },
+                    "403": {
+                        "description": "Requiere el rol admin",
+                        "schema": {
+                            "$ref": "#/definitions/httpapi.ErrorResponse"
                         }
                     },
                     "503": {
@@ -194,6 +259,51 @@ const docTemplate = `{
                 },
                 "statistics": {
                     "$ref": "#/definitions/stats.Statistics"
+                },
+                "username": {
+                    "description": "Username es el autor del cálculo; solo se incluye en el historial de todos los usuarios.",
+                    "type": "string",
+                    "example": "analyst"
+                }
+            }
+        },
+        "history.Usage": {
+            "type": "object",
+            "properties": {
+                "cacheHits": {
+                    "type": "integer",
+                    "example": 9
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 30
+                },
+                "users": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/history.UserUsage"
+                    }
+                }
+            }
+        },
+        "history.UserUsage": {
+            "type": "object",
+            "properties": {
+                "cacheHits": {
+                    "type": "integer",
+                    "example": 4
+                },
+                "count": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "lastAt": {
+                    "type": "string",
+                    "example": "2026-09-28T18:30:00Z"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "analyst"
                 }
             }
         },

@@ -4,20 +4,37 @@ import { factorize } from '../api/endpoints';
 import type { FactorizeResult, HistoryEntry, Matrix, Session } from '../api/types';
 import { useAuth } from '../auth/session';
 import { EXAMPLES, matrixToText } from '../lib/matrix';
+import { ActivityView } from './ActivityView';
 import { ErrorMessage } from './ErrorMessage';
 import { HistoryPanel } from './HistoryPanel';
 import { MatrixEditor } from './MatrixEditor';
 import { ResultView } from './ResultView';
+import { StatsToolView } from './StatsToolView';
 
-const ROLE_LABELS: Record<Session['role'], string> = { admin: 'Administrador', analyst: 'Analista' };
+type View = 'factorize' | 'activity' | 'stats';
+
+const ROLE_LABELS: Record<Session['role'], string> = { admin: 'administrador', analyst: 'analista' };
+
+/** Vistas por rol: analyst solo factoriza; admin además ve la actividad del equipo y usa la Stats API directa. */
+const VIEWS: Record<Session['role'], { id: View; label: string }[]> = {
+  analyst: [{ id: 'factorize', label: 'Factorizar' }],
+  admin: [
+    { id: 'factorize', label: 'Factorizar' },
+    { id: 'activity', label: 'Actividad del equipo' },
+    { id: 'stats', label: 'Stats API' },
+  ],
+};
 
 export function Dashboard({ session }: { session: Session }) {
   const { logout } = useAuth();
+  const [view, setView] = useState<View>('factorize');
   const [matrixText, setMatrixText] = useState(() => matrixToText(EXAMPLES[0].matrix));
   const [result, setResult] = useState<FactorizeResult | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [historyVersion, setHistoryVersion] = useState(0);
+
+  const views = VIEWS[session.role];
 
   const handleUnauthorized = useCallback(
     () => logout('Tu sesión expiró o no es válida. Vuelve a iniciar sesión.'),
@@ -41,50 +58,69 @@ export function Dashboard({ session }: { session: Session }) {
     }
   }
 
-  function handleSelectHistory(entry: HistoryEntry) {
+  function openEntry(entry: HistoryEntry) {
     setMatrixText(matrixToText(entry.matrix));
     setError(null);
     setResult({ ...entry, requestId: null });
+    setView('factorize');
   }
 
   return (
-    <div className="layout">
+    <div className="shell">
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-logo" aria-hidden="true">QR</span>
-          <div>
-            <h1>Factorización QR</h1>
-            <p className="muted small">A = Q·R con Go (Gonum) · estadísticas con Node.js · vía Kong</p>
-          </div>
+        <div className="wordmark">
+          <span className="mono">A = Q·R</span>
+          <span className="dim">Factorización QR</span>
         </div>
+
+        {views.length > 1 && (
+          <nav className="tabs" aria-label="Secciones">
+            {views.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                aria-current={view === item.id ? 'page' : undefined}
+                onClick={() => setView(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        )}
+
         <div className="user">
-          <span><strong>{session.username}</strong> <span className="badge">{ROLE_LABELS[session.role]}</span></span>
-          <button type="button" className="button-secondary" onClick={() => logout()}>Cerrar sesión</button>
+          <span><strong>{session.username}</strong> <span className="dim">· {ROLE_LABELS[session.role]}</span></span>
+          <button type="button" className="button-link" onClick={() => logout()}>Salir</button>
         </div>
       </header>
 
-      <main className="content">
-        <aside className="sidebar">
-          <MatrixEditor value={matrixText} onChange={setMatrixText} onSubmit={handleSubmit} loading={loading} />
-          <HistoryPanel
-            token={session.token}
-            refreshKey={historyVersion}
-            onSelect={handleSelectHistory}
-            onUnauthorized={handleUnauthorized}
-          />
-        </aside>
-
-        <section className="main" aria-live="polite">
-          <ErrorMessage error={error} />
-          {result
-            ? <ResultView result={result} />
-            : !error && (
-              <div className="card empty">
-                <h2>Sin resultados todavía</h2>
-                <p className="muted">Escribe una matriz o elige un ejemplo y pulsa <strong>Calcular factorización QR</strong>.</p>
-              </div>
-            )}
-        </section>
+      <main>
+        {view === 'factorize' && (
+          <div className="split">
+            <aside className="side">
+              <MatrixEditor value={matrixText} onChange={setMatrixText} onSubmit={handleSubmit} loading={loading} />
+              <HistoryPanel
+                token={session.token}
+                refreshKey={historyVersion}
+                onSelect={openEntry}
+                onUnauthorized={handleUnauthorized}
+              />
+            </aside>
+            <section className="results" aria-live="polite">
+              <ErrorMessage error={error} />
+              {result
+                ? <ResultView result={result} />
+                : !error && (
+                  <div className="empty">
+                    <p>Escribe una matriz o elige un ejemplo y pulsa <strong>Calcular</strong>.</p>
+                    <p className="dim">Q y R aparecerán aquí, junto con sus estadísticas.</p>
+                  </div>
+                )}
+            </section>
+          </div>
+        )}
+        {view === 'activity' && <ActivityView token={session.token} onOpen={openEntry} onUnauthorized={handleUnauthorized} />}
+        {view === 'stats' && <StatsToolView token={session.token} lastResult={result} onUnauthorized={handleUnauthorized} />}
       </main>
     </div>
   );

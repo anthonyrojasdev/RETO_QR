@@ -18,7 +18,9 @@ var ErrUnavailable = errors.New("el historial no está disponible")
 
 // Entry es una factorización guardada.
 type Entry struct {
-	ID         int64            `json:"id" example:"42"`
+	ID int64 `json:"id" example:"42"`
+	// Username es el autor del cálculo; solo se incluye en el historial de todos los usuarios.
+	Username   string           `json:"username,omitempty" example:"analyst"`
 	CreatedAt  time.Time        `json:"createdAt" example:"2026-09-28T18:30:00Z"`
 	Rows       int              `json:"rows" example:"2"`
 	Columns    int              `json:"columns" example:"3"`
@@ -41,10 +43,29 @@ type NewEntry struct {
 	Cached     bool
 }
 
+// UserUsage resume la actividad de un usuario.
+type UserUsage struct {
+	Username  string    `json:"username" example:"analyst"`
+	Count     int       `json:"count" example:"12"`
+	CacheHits int       `json:"cacheHits" example:"4"`
+	LastAt    time.Time `json:"lastAt" example:"2026-09-28T18:30:00Z"`
+}
+
+// Usage resume el uso del servicio por todos los usuarios.
+type Usage struct {
+	Total     int         `json:"total" example:"30"`
+	CacheHits int         `json:"cacheHits" example:"9"`
+	Users     []UserUsage `json:"users"`
+}
+
 // Store guarda y lista factorizaciones.
 type Store interface {
 	Save(ctx context.Context, entry NewEntry) error
 	List(ctx context.Context, username string, limit int) ([]Entry, error)
+	// ListAll devuelve las últimas factorizaciones de todos los usuarios, con su autor.
+	ListAll(ctx context.Context, limit int) ([]Entry, error)
+	// Usage resume cuántos cálculos hizo cada usuario y cuántos salieron del caché.
+	Usage(ctx context.Context) (Usage, error)
 }
 
 // schema crea la tabla del servicio. Es idempotente y se ejecuta al arrancar.
@@ -127,6 +148,49 @@ func (p *Postgres) List(ctx context.Context, username string, limit int) ([]Entr
 	})
 }
 
+// ListAll implementa Store.
+func (p *Postgres) ListAll(ctx context.Context, limit int) ([]Entry, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT id, username, created_at, row_count, column_count, matrix, q, r, statistics, cached
+		FROM factorizations
+		ORDER BY created_at DESC, id DESC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Entry, error) {
+		var e Entry
+		err := row.Scan(&e.ID, &e.Username, &e.CreatedAt, &e.Rows, &e.Columns, &e.Matrix, &e.Q, &e.R, &e.Statistics, &e.Cached)
+		return e, err
+	})
+}
+
+// Usage implementa Store.
+func (p *Postgres) Usage(ctx context.Context) (Usage, error) {
+	rows, err := p.pool.Query(ctx, `
+		SELECT username, count(*), count(*) FILTER (WHERE cached), max(created_at)
+		FROM factorizations
+		GROUP BY username
+		ORDER BY count(*) DESC, username`)
+	if err != nil {
+		return Usage{}, err
+	}
+	users, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (UserUsage, error) {
+		var u UserUsage
+		err := row.Scan(&u.Username, &u.Count, &u.CacheHits, &u.LastAt)
+		return u, err
+	})
+	if err != nil {
+		return Usage{}, err
+	}
+	usage := Usage{Users: users}
+	for _, u := range users {
+		usage.Total += u.Count
+		usage.CacheHits += u.CacheHits
+	}
+	return usage, nil
+}
+
 // Close cierra el pool de conexiones.
 func (p *Postgres) Close() {
 	p.pool.Close()
@@ -140,3 +204,9 @@ func (Disabled) Save(context.Context, NewEntry) error { return nil }
 
 // List implementa Store (el historial no está disponible).
 func (Disabled) List(context.Context, string, int) ([]Entry, error) { return nil, ErrUnavailable }
+
+// ListAll implementa Store (el historial no está disponible).
+func (Disabled) ListAll(context.Context, int) ([]Entry, error) { return nil, ErrUnavailable }
+
+// Usage implementa Store (el historial no está disponible).
+func (Disabled) Usage(context.Context) (Usage, error) { return Usage{}, ErrUnavailable }

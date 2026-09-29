@@ -70,8 +70,13 @@ Usuarios de prueba (definidos en `.env.example`):
 
 | Usuario | Contraseña | Rol | Puede |
 |---|---|---|---|
-| `analyst` | `Analyst123!` | analyst | `POST /api/qr`, `GET /api/qr/history` |
-| `admin` | `Admin123!` | admin | Lo anterior y `POST /api/statistics` |
+| `analyst` | `Analyst123!` | analyst | `POST /api/qr`, `GET /api/qr/history` (solo su historial) |
+| `admin` | `Admin123!` | admin | Lo anterior, `GET /api/qr/history?scope=all`, `GET /api/qr/usage` y `POST /api/statistics` |
+
+En el frontend, `analyst` solo ve la vista **Factorizar** (editor, resultado e historial propio). `admin` tiene además
+**Actividad del equipo** (cálculos por usuario, uso del caché y últimos cálculos de todos, que puede abrir) y
+**Stats API** (envía Q y R directamente a la Stats API). Kong aplica la ACL de `/api/statistics`; la QR API
+comprueba el rol del JWT para `scope=all` y `/qr/usage`.
 
 ## Uso de la API
 

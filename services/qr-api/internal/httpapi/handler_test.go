@@ -65,6 +65,8 @@ type fakeHistory struct {
 	listErr error
 	gotUser string
 	gotMax  int
+	gotAll  bool
+	usage   history.Usage
 }
 
 func (f *fakeHistory) Save(_ context.Context, e history.NewEntry) error {
@@ -78,6 +80,15 @@ func (f *fakeHistory) Save(_ context.Context, e history.NewEntry) error {
 func (f *fakeHistory) List(_ context.Context, username string, limit int) ([]history.Entry, error) {
 	f.gotUser, f.gotMax = username, limit
 	return f.entries, f.listErr
+}
+
+func (f *fakeHistory) ListAll(_ context.Context, limit int) ([]history.Entry, error) {
+	f.gotAll, f.gotMax = true, limit
+	return f.entries, f.listErr
+}
+
+func (f *fakeHistory) Usage(context.Context) (history.Usage, error) {
+	return f.usage, f.listErr
 }
 
 // --- Utilidades ---------------------------------------------------------------
@@ -110,9 +121,19 @@ func newTestEnv() *testEnv {
 
 // bearer arma una cabecera Authorization con un JWT de prueba (Kong ya validó la firma).
 func bearer(sub string) string {
+	return bearerWithRole(sub, "analyst")
+}
+
+func bearerWithRole(sub, role string) string {
 	encode := base64.RawURLEncoding.EncodeToString
 	return "Bearer " + encode([]byte(`{"alg":"HS256"}`)) + "." +
-		encode([]byte(`{"sub":"`+sub+`","role":"analyst"}`)) + ".firma"
+		encode([]byte(`{"sub":"`+sub+`","role":"`+role+`"}`)) + ".firma"
+}
+
+func getAs(path, authorization string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", authorization)
+	return req
 }
 
 func postJSON(body string) *http.Request {
@@ -414,5 +435,67 @@ func TestSwaggerUIUsesRelativeSpecURLBehindGateway(t *testing.T) {
 
 	if resp := env.do(httptest.NewRequest(http.MethodGet, "/docs/doc.json", nil)); resp.StatusCode != http.StatusOK {
 		t.Errorf("doc.json: estado = %d, se esperaba 200", resp.StatusCode)
+	}
+}
+
+func TestHistoryScopeAllIsOnlyForAdmins(t *testing.T) {
+	env := newTestEnv()
+	env.history.entries = []history.Entry{{ID: 1, Username: "ana", Rows: 1, Columns: 1}}
+
+	resp := env.do(getAs("/qr/history?scope=all", bearer("ana")))
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("analyst: estado = %d, se esperaba 403", resp.StatusCode)
+	}
+	if env.history.gotAll {
+		t.Error("un analyst no debe llegar a leer el historial de todos")
+	}
+
+	resp = env.do(getAs("/qr/history?scope=all&limit=20", bearerWithRole("root", "admin")))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin: estado = %d, se esperaba 200", resp.StatusCode)
+	}
+	body := decode[HistoryResponse](t, resp)
+	if !env.history.gotAll || env.history.gotMax != 20 || len(body.Items) != 1 || body.Items[0].Username != "ana" {
+		t.Errorf("admin debe recibir el historial de todos con su autor: %+v", body)
+	}
+}
+
+func TestHistoryRejectsUnknownScope(t *testing.T) {
+	resp := newTestEnv().do(getAs("/qr/history?scope=otros", bearer("ana")))
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("estado = %d, se esperaba 400", resp.StatusCode)
+	}
+	if body := decode[ErrorResponse](t, resp); body.Error.Code != "INVALID_SCOPE" {
+		t.Errorf("código = %q, se esperaba INVALID_SCOPE", body.Error.Code)
+	}
+}
+
+func TestUsageIsOnlyForAdmins(t *testing.T) {
+	env := newTestEnv()
+	env.history.usage = history.Usage{Total: 3, CacheHits: 1, Users: []history.UserUsage{{Username: "ana", Count: 3, CacheHits: 1}}}
+
+	if resp := env.do(getAs("/qr/usage", bearer("ana"))); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("analyst: estado = %d, se esperaba 403", resp.StatusCode)
+	}
+
+	resp := env.do(getAs("/qr/usage", bearerWithRole("root", "admin")))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin: estado = %d, se esperaba 200", resp.StatusCode)
+	}
+	if body := decode[history.Usage](t, resp); body.Total != 3 || len(body.Users) != 1 || body.Users[0].Username != "ana" {
+		t.Errorf("uso inesperado: %+v", body)
+	}
+}
+
+func TestUsageReturnsEmptyListAndHandlesUnavailableHistory(t *testing.T) {
+	env := newTestEnv()
+	resp := env.do(getAs("/qr/usage", bearerWithRole("root", "admin")))
+	if body := decode[map[string]any](t, resp); body["users"] == nil {
+		t.Error("users debe ser una lista vacía, no null")
+	}
+
+	env.history.listErr = history.ErrUnavailable
+	if resp := env.do(getAs("/qr/usage", bearerWithRole("root", "admin"))); resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("estado = %d, se esperaba 503", resp.StatusCode)
 	}
 }
