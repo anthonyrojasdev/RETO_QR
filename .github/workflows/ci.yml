@@ -187,7 +187,9 @@ jobs:
             set -e
             cd ~/reto-qr
             test -f .env || { echo "Falta ~/reto-qr/.env en el VPS (cp .env.prod.example .env)"; exit 1; }
-            git pull --ff-only
+            # fetch + reset en vez de pull: el VPS no guarda cambios locales y así tolera historial reescrito
+            git fetch --quiet origin main
+            git reset --hard origin/main
             export IMAGE_TAG=${{ github.sha }}
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
