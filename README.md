@@ -66,7 +66,7 @@ desde Windows. Para detener todo: `docker compose down` (agrega `-v` para borrar
 | http://localhost:8000/api/docs/qr/index.html | OpenAPI de la QR API |
 | http://localhost:8000/api/docs/stats/ | OpenAPI de la Stats API (con la barra final) |
 
-Usuarios de prueba (definidos en `.env.example`):
+Usuarios de prueba, solo para desarrollo (definidos en `.env.example`; en producción las claves se generan al instalar):
 
 | Usuario | Contraseña | Rol | Puede |
 |---|---|---|---|
