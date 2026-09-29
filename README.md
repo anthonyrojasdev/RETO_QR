@@ -198,7 +198,7 @@ tienen healthchecks, apagado ordenado e imágenes mínimas sin usuario root (Go 
 | Auth | Login, JWT, bcrypt, configuración | `cd services/auth-api && npm test` |
 | Frontend | Parser de matrices, cliente HTTP y flujo completo con Testing Library | `cd frontend && npm test` |
 | Integración | Go ↔ PostgreSQL/Redis y Auth ↔ PostgreSQL (se activan con `TEST_DATABASE_URL` / `TEST_REDIS_URL`) | En CI con contenedores de servicio |
-| E2E | Kong → Go → Node con PostgreSQL y Redis reales: JWT, roles, caché, historial, CORS, rate limit | `docker compose up -d --build --wait && node --test tests/e2e/` |
+| E2E | Kong → Go → Node con PostgreSQL y Redis reales: JWT, roles, caché, historial, CORS, rate limit | `docker compose up -d --build --wait && node --test tests/e2e/*.test.mjs` |
 
 La prueba E2E de rate limit bloquea el login por un minuto; si repites la suite, espera ese minuto.
 
