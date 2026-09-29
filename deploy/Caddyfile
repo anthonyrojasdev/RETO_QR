@@ -1,0 +1,19 @@
+# Acceso por IP y HTTP (sin dominio no hay certificado HTTPS válido).
+# {$DOMAIN} es la IP o el dominio; con el prefijo http:// Caddy no intenta HTTPS.
+# Cuando tengas dominio: quita "http://" de la línea siguiente, pon el dominio en .env
+# y abre el puerto 443 (Caddy obtiene el certificado solo).
+http://{$DOMAIN} {
+	encode gzip
+
+	# API (login, QR, historial, docs) → Kong
+	handle /api/* {
+		reverse_proxy kong:8000
+	}
+
+	# Todo lo demás → frontend (nginx)
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	header -Server
+}
