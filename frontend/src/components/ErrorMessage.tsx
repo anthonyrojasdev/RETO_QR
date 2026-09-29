@@ -18,7 +18,7 @@ export function ErrorMessage({ error }: Props) {
           {apiError.details.map((detail) => <li key={detail}>{detail}</li>)}
         </ul>
       )}
-      {apiError?.requestId && <p className="muted small">ID de la petición: <code>{apiError.requestId}</code></p>}
+      {apiError?.requestId && <p className="note">ID de la petición: <code>{apiError.requestId}</code></p>}
     </div>
   );
 }

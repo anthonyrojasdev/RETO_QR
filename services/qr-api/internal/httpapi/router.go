@@ -81,6 +81,7 @@ func NewApp(deps Dependencies) *fiber.App {
 	app.Get("/health", h.Health)
 	app.Post("/qr", h.Factorize)
 	app.Get("/qr/history", h.History)
+	app.Get("/qr/usage", h.Usage)
 	// URL relativa: detrás de Kong (/api/docs/qr/index.html) resuelve a /api/docs/qr/doc.json.
 	// Con la URL por defecto la librería añade X-Forwarded-Prefix + /docs/ y apunta a una ruta inexistente.
 	app.Get("/docs/*", swagger.New(swagger.Config{URL: "doc.json"}))

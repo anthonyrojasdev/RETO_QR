@@ -41,6 +41,39 @@ definitions:
         type: integer
       statistics:
         $ref: '#/definitions/stats.Statistics'
+      username:
+        description: Username es el autor del cálculo; solo se incluye en el historial
+          de todos los usuarios.
+        example: analyst
+        type: string
+    type: object
+  history.Usage:
+    properties:
+      cacheHits:
+        example: 9
+        type: integer
+      total:
+        example: 30
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/history.UserUsage'
+        type: array
+    type: object
+  history.UserUsage:
+    properties:
+      cacheHits:
+        example: 4
+        type: integer
+      count:
+        example: 12
+        type: integer
+      lastAt:
+        example: "2026-09-28T18:30:00Z"
+        type: string
+      username:
+        example: analyst
+        type: string
     type: object
   httpapi.ErrorBody:
     properties:
@@ -215,14 +248,22 @@ paths:
       - qr
   /qr/history:
     get:
-      description: Devuelve las últimas factorizaciones del usuario del token, de
-        la más reciente a la más antigua.
+      description: |-
+        Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.
+        Con scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.
       parameters:
       - default: 10
         description: Cantidad máxima de resultados (1-50)
         in: query
         name: limit
         type: integer
+      - description: mine (por defecto) o all (solo admin)
+        enum:
+        - mine
+        - all
+        in: query
+        name: scope
+        type: string
       produces:
       - application/json
       responses:
@@ -230,10 +271,18 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/httpapi.HistoryResponse'
+        "400":
+          description: scope inválido
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
         "401":
           description: Token ausente, inválido o expirado (responde Kong)
           schema:
             $ref: '#/definitions/httpapi.GatewayError'
+        "403":
+          description: scope=all requiere el rol admin
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
         "503":
           description: El historial no está disponible
           schema:
@@ -241,6 +290,34 @@ paths:
       security:
       - BearerAuth: []
       summary: Historial de factorizaciones
+      tags:
+      - qr
+  /qr/usage:
+    get:
+      description: Cantidad de factorizaciones por usuario, cuántas salieron del caché
+        de Redis y la fecha de la última. Solo para el rol admin.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/history.Usage'
+        "401":
+          description: Token ausente, inválido o expirado (responde Kong)
+          schema:
+            $ref: '#/definitions/httpapi.GatewayError'
+        "403":
+          description: Requiere el rol admin
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+        "503":
+          description: El historial no está disponible
+          schema:
+            $ref: '#/definitions/httpapi.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Uso del servicio por usuario
       tags:
       - qr
 securityDefinitions:

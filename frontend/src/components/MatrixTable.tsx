@@ -2,34 +2,38 @@ import type { Matrix } from '../api/types';
 import { formatNumber } from '../lib/matrix';
 
 interface Props {
-  title: string;
+  name: string;
   description: string;
   matrix: Matrix;
+  decimals: number;
   /** Atenúa los ceros bajo la diagonal (útil para R, triangular superior). */
   dimLowerTriangle?: boolean;
 }
 
-/** Muestra una matriz con sus dimensiones y la diagonal principal resaltada. */
-export function MatrixTable({ title, description, matrix, dimLowerTriangle = false }: Props) {
+/** Matriz entre corchetes, con la diagonal principal marcada y el valor exacto al pasar el cursor. */
+export function MatrixTable({ name, description, matrix, decimals, dimLowerTriangle = false }: Props) {
   return (
     <figure className="matrix">
       <figcaption>
-        <strong>{title}</strong> <span className="badge">{matrix.length}×{matrix[0].length}</span>
-        <span className="muted small"> {description}</span>
+        <span className="matrix-name">{name}</span>
+        <span className="dim mono">{matrix.length}×{matrix[0].length}</span>
+        <span className="dim">{description}</span>
       </figcaption>
       <div className="matrix-scroll">
+        <div className="bracket">
         <table>
           <tbody>
             {matrix.map((row, i) => (
               <tr key={i}>
                 {row.map((value, j) => {
                   const classes = [i === j && 'diagonal', dimLowerTriangle && i > j && 'dimmed'].filter(Boolean).join(' ');
-                  return <td key={j} className={classes || undefined} title={String(value)}>{formatNumber(value)}</td>;
+                  return <td key={j} className={classes || undefined} title={String(value)}>{formatNumber(value, decimals)}</td>;
                 })}
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </figure>
   );
