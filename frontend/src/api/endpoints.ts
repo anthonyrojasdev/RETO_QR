@@ -23,12 +23,16 @@ export async function factorize(matrix: Matrix, token: string): Promise<Factoriz
 /**
  * GET /api/qr/history → factorizaciones guardadas en PostgreSQL.
  * scope "mine": las del usuario; "all": las de todos, con su autor (solo admin).
+ * user: las de otro usuario concreto (solo admin).
  */
 export async function fetchHistory(
   token: string,
-  { limit = 8, scope = 'mine' }: { limit?: number; scope?: 'mine' | 'all' } = {},
+  { limit = 8, scope = 'mine', user }: { limit?: number; scope?: 'mine' | 'all'; user?: string } = {},
 ): Promise<HistoryEntry[]> {
-  const { data } = await request<{ items: HistoryEntry[] }>(`/api/qr/history?limit=${limit}&scope=${scope}`, { token });
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (user) params.set('user', user);
+  else params.set('scope', scope);
+  const { data } = await request<{ items: HistoryEntry[] }>(`/api/qr/history?${params}`, { token });
   return data.items;
 }
 

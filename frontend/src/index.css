@@ -283,6 +283,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--i
   font-size: 0.85rem;
 }
 .history button:hover { background: var(--accent-wash); }
+.history.with-author button { grid-template-columns: 3.5rem minmax(0, 1fr) auto; }
+.history .author { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-head select { padding: 0.15rem 0.4rem; font-size: 0.82rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
 .data-table th { text-align: left; font-weight: 600; font-size: 0.75rem; color: var(--ink-soft); padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--rule-strong); }

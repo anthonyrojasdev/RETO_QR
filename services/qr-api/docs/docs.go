@@ -97,7 +97,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.\nCon scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.",
+                "description": "Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.\nCon scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.\nCon user=\u003cnombre\u003e (solo rol admin) devuelve las de ese usuario.",
                 "produces": [
                     "application/json"
                 ],
@@ -122,6 +122,12 @@ const docTemplate = `{
                         "description": "mine (por defecto) o all (solo admin)",
                         "name": "scope",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Historial de otro usuario (solo admin); no se combina con scope=all",
+                        "name": "user",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -132,7 +138,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "scope inválido",
+                        "description": "scope inválido o combinado con user",
                         "schema": {
                             "$ref": "#/definitions/httpapi.ErrorResponse"
                         }
@@ -144,7 +150,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "scope=all requiere el rol admin",
+                        "description": "scope=all o el historial de otro usuario requieren el rol admin",
                         "schema": {
                             "$ref": "#/definitions/httpapi.ErrorResponse"
                         }
