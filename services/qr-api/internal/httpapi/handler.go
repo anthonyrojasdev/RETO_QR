@@ -131,11 +131,15 @@ func (h *Handler) Factorize(c *fiber.Ctx) error {
 //
 //	@Summary		Historial de factorizaciones
 //	@Description	Devuelve las últimas factorizaciones del usuario del token, de la más reciente a la más antigua.
+//	@Description	Con scope=all (solo rol admin) devuelve las de todos los usuarios e incluye el autor de cada una.
 //	@Tags			qr
 //	@Produce		json
-//	@Param			limit	query		int	false	"Cantidad máxima de resultados (1-50)"	default(10)
+//	@Param			limit	query		int		false	"Cantidad máxima de resultados (1-50)"	default(10)
+//	@Param			scope	query		string	false	"mine (por defecto) o all (solo admin)"	Enums(mine, all)
 //	@Success		200		{object}	HistoryResponse
+//	@Failure		400		{object}	ErrorResponse	"scope inválido"
 //	@Failure		401		{object}	GatewayError	"Token ausente, inválido o expirado (responde Kong)"
+//	@Failure		403		{object}	ErrorResponse	"scope=all requiere el rol admin"
 //	@Failure		503		{object}	ErrorResponse	"El historial no está disponible"
 //	@Security		BearerAuth
 //	@Router			/qr/history [get]
@@ -145,22 +149,73 @@ func (h *Handler) History(c *fiber.Ctx) error {
 		return newAPIError(fiber.StatusUnauthorized, "UNAUTHENTICATED", err.Error())
 	}
 
+	scope := c.Query("scope", "mine")
+	if scope != "mine" && scope != "all" {
+		return newAPIError(fiber.StatusBadRequest, "INVALID_SCOPE", "scope debe ser mine o all")
+	}
+	if scope == "all" && !user.IsAdmin() {
+		return newAPIError(fiber.StatusForbidden, "FORBIDDEN", "solo un administrador puede ver el historial de todos los usuarios")
+	}
+
 	limit := c.QueryInt("limit", defaultHistoryLimit)
 	limit = max(1, min(limit, maxHistoryLimit))
 
 	ctx, cancel := context.WithTimeout(c.UserContext(), 3*time.Second)
 	defer cancel()
-	entries, err := h.history.List(ctx, user.Username, limit)
+	var entries []history.Entry
+	if scope == "all" {
+		entries, err = h.history.ListAll(ctx, limit)
+	} else {
+		entries, err = h.history.List(ctx, user.Username, limit)
+	}
 	if err != nil {
-		if !errors.Is(err, history.ErrUnavailable) {
-			h.logger.Error("no se pudo leer el historial", "requestId", requestID(c), "error", err)
-		}
-		return newAPIError(fiber.StatusServiceUnavailable, "HISTORY_UNAVAILABLE", "el historial no está disponible")
+		return h.historyUnavailable(c, err)
 	}
 	if entries == nil {
 		entries = []history.Entry{}
 	}
 	return c.JSON(HistoryResponse{Items: entries})
+}
+
+// Usage resume la actividad de todos los usuarios (solo administradores).
+//
+//	@Summary		Uso del servicio por usuario
+//	@Description	Cantidad de factorizaciones por usuario, cuántas salieron del caché de Redis y la fecha de la última. Solo para el rol admin.
+//	@Tags			qr
+//	@Produce		json
+//	@Success		200	{object}	history.Usage
+//	@Failure		401	{object}	GatewayError	"Token ausente, inválido o expirado (responde Kong)"
+//	@Failure		403	{object}	ErrorResponse	"Requiere el rol admin"
+//	@Failure		503	{object}	ErrorResponse	"El historial no está disponible"
+//	@Security		BearerAuth
+//	@Router			/qr/usage [get]
+func (h *Handler) Usage(c *fiber.Ctx) error {
+	user, err := identity.FromAuthorization(c.Get(fiber.HeaderAuthorization))
+	if err != nil {
+		return newAPIError(fiber.StatusUnauthorized, "UNAUTHENTICATED", err.Error())
+	}
+	if !user.IsAdmin() {
+		return newAPIError(fiber.StatusForbidden, "FORBIDDEN", "solo un administrador puede ver el uso del servicio")
+	}
+
+	ctx, cancel := context.WithTimeout(c.UserContext(), 3*time.Second)
+	defer cancel()
+	usage, err := h.history.Usage(ctx)
+	if err != nil {
+		return h.historyUnavailable(c, err)
+	}
+	if usage.Users == nil {
+		usage.Users = []history.UserUsage{}
+	}
+	return c.JSON(usage)
+}
+
+// historyUnavailable registra el fallo (salvo que el historial esté desactivado) y responde 503.
+func (h *Handler) historyUnavailable(c *fiber.Ctx, err error) error {
+	if !errors.Is(err, history.ErrUnavailable) {
+		h.logger.Error("no se pudo leer el historial", "requestId", requestID(c), "error", err)
+	}
+	return newAPIError(fiber.StatusServiceUnavailable, "HISTORY_UNAVAILABLE", "el historial no está disponible")
 }
 
 // Health indica que el servicio está en funcionamiento (lo usa Docker).

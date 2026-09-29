@@ -19,6 +19,12 @@ func TestDisabledStore(t *testing.T) {
 	if _, err := s.List(context.Background(), "ana", 10); !errors.Is(err, ErrUnavailable) {
 		t.Errorf("List() error = %v, se esperaba ErrUnavailable", err)
 	}
+	if _, err := s.ListAll(context.Background(), 10); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("ListAll() error = %v, se esperaba ErrUnavailable", err)
+	}
+	if _, err := s.Usage(context.Background()); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("Usage() error = %v, se esperaba ErrUnavailable", err)
+	}
 }
 
 func TestConnectFailsWithInvalidURL(t *testing.T) {
@@ -74,5 +80,30 @@ func TestPostgresIntegration(t *testing.T) {
 
 	if others, _ := store.List(ctx, user+"-otro", 10); len(others) != 0 {
 		t.Error("un usuario no debe ver el historial de otro")
+	}
+
+	all, err := store.ListAll(ctx, 1)
+	if err != nil {
+		t.Fatalf("ListAll() error = %v", err)
+	}
+	if len(all) != 1 || all[0].Username != user || all[0].Matrix[0][0] != 3 {
+		t.Errorf("ListAll() debe devolver la última entrada con su autor: %+v", all)
+	}
+
+	usage, err := store.Usage(ctx)
+	if err != nil {
+		t.Fatalf("Usage() error = %v", err)
+	}
+	var mine *UserUsage
+	for i := range usage.Users {
+		if usage.Users[i].Username == user {
+			mine = &usage.Users[i]
+		}
+	}
+	if mine == nil || mine.Count != 3 || mine.CacheHits != 1 || mine.LastAt.IsZero() {
+		t.Errorf("Usage() no resume bien al usuario: %+v", mine)
+	}
+	if usage.Total < 3 || usage.CacheHits < 1 {
+		t.Errorf("Usage() totales incorrectos: %+v", usage)
 	}
 }

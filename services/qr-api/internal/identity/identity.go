@@ -44,3 +44,11 @@ func FromAuthorization(header string) (Identity, error) {
 	}
 	return id, nil
 }
+
+// RoleAdmin es el rol con acceso a la actividad de todos los usuarios.
+const RoleAdmin = "admin"
+
+// IsAdmin indica si el usuario tiene el rol de administrador.
+func (id Identity) IsAdmin() bool {
+	return id.Role == RoleAdmin
+}

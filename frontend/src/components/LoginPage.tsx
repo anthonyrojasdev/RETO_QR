@@ -2,11 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/session';
 import { ErrorMessage } from './ErrorMessage';
 
-/** Usuarios de .env.example, para probar rápidamente los dos roles. */
-const DEMO_USERS = [
-  { username: 'analyst', password: 'Analyst123!', description: 'solo factorización QR' },
-  { username: 'admin', password: 'Admin123!', description: 'QR + Stats API directa' },
-];
+/** Usuarios de .env.example. Solo se ofrecen en desarrollo: en producción las claves son otras. */
+const DEMO_USERS = import.meta.env.DEV
+  ? [
+    { username: 'analyst', password: 'Analyst123!', description: 'factoriza y ve su historial' },
+    { username: 'admin', password: 'Admin123!', description: 'además, actividad del equipo y Stats API' },
+  ]
+  : [];
 
 export function LoginPage() {
   const { login, logoutReason } = useAuth();
@@ -29,41 +31,45 @@ export function LoginPage() {
 
   return (
     <main className="login">
-      <form className="card login-card" onSubmit={handleSubmit}>
-        <div className="brand">
-          <span className="brand-logo" aria-hidden="true">QR</span>
-          <div>
-            <h1>Factorización QR</h1>
-            <p className="muted">Go · Node.js · Kong · PostgreSQL · Redis</p>
-          </div>
-        </div>
+      <div className="login-intro">
+        <p className="mono login-formula">A = Q·R</p>
+        <p>Factoriza matrices rectangulares y revisa las estadísticas de Q y R.</p>
+        <p className="dim">Go calcula la factorización, Node.js las estadísticas y Kong protege el acceso.</p>
+      </div>
 
-        {logoutReason && <div className="alert alert-info" role="status">{logoutReason}</div>}
+      <form className="login-form" onSubmit={handleSubmit}>
+        <h1>Iniciar sesión</h1>
+        {logoutReason && <p className="alert alert-info" role="status">{logoutReason}</p>}
         <ErrorMessage error={error} />
 
-        <label htmlFor="username">Usuario</label>
-        <input id="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
-
-        <label htmlFor="password">Contraseña</label>
-        <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        <label className="field">
+          <span>Usuario</span>
+          <input autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Contraseña</span>
+          <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </label>
 
         <button type="submit" className="button-primary" disabled={submitting}>
           {submitting ? 'Ingresando…' : 'Ingresar'}
         </button>
 
-        <div className="demo-users">
-          <p className="muted small">Usuarios de prueba (definidos en <code>.env.example</code>):</p>
-          {DEMO_USERS.map((user) => (
-            <button
-              key={user.username}
-              type="button"
-              className="chip"
-              onClick={() => { setUsername(user.username); setPassword(user.password); }}
-            >
-              <strong>{user.username}</strong> · {user.description}
-            </button>
-          ))}
-        </div>
+        {DEMO_USERS.length > 0 && (
+          <div className="demo-users">
+            <p className="note">Usuarios de desarrollo (<code>.env.example</code>):</p>
+            {DEMO_USERS.map((user) => (
+              <button
+                key={user.username}
+                type="button"
+                className="button-link"
+                onClick={() => { setUsername(user.username); setPassword(user.password); }}
+              >
+                {user.username} <span className="dim">— {user.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </form>
     </main>
   );
