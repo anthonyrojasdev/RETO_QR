@@ -396,3 +396,23 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("estado = %d, se esperaba 200", resp.StatusCode)
 	}
 }
+
+// Detrás de Kong la UI se sirve en /api/docs/qr/index.html con X-Forwarded-Prefix;
+// la especificación debe pedirse con una URL relativa para resolver a /api/docs/qr/doc.json.
+func TestSwaggerUIUsesRelativeSpecURLBehindGateway(t *testing.T) {
+	env := newTestEnv()
+	req := httptest.NewRequest(http.MethodGet, "/docs/index.html", nil)
+	req.Header.Set("X-Forwarded-Prefix", "/api/docs/qr")
+	resp := env.do(req)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("estado = %d, se esperaba 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"doc.json"`) || strings.Contains(string(body), "/docs/doc.json") {
+		t.Errorf("la UI no usa la URL relativa doc.json")
+	}
+
+	if resp := env.do(httptest.NewRequest(http.MethodGet, "/docs/doc.json", nil)); resp.StatusCode != http.StatusOK {
+		t.Errorf("doc.json: estado = %d, se esperaba 200", resp.StatusCode)
+	}
+}
