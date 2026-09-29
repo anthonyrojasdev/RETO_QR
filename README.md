@@ -174,7 +174,9 @@ tienen healthchecks, apagado ordenado e imágenes mínimas sin usuario root (Go 
 ```
 .
 ├── docker-compose.yml          # entorno completo
-├── docker-compose.prod.yml     # despliegue con imágenes de GHCR
+├── docker-compose.prod.yml     # VPS: imágenes de GHCR + Caddy (HTTPS)
+├── .env.prod.example           # plantilla de producción
+├── deploy/                     # Caddyfile, bootstrap del VPS y backups
 ├── .env.example                # configuración y secretos de desarrollo
 ├── gateway/                    # Kong: configuración declarativa y entrypoint
 ├── infra/postgres/init.sh      # crea las bases auth y qr con sus usuarios
@@ -210,19 +212,32 @@ La prueba E2E de rate limit bloquea el login por un minuto; si repites la suite,
 4. En `main`: publica las imágenes en GitHub Container Registry (`ghcr.io/<owner>/reto-qr-*`).
 5. En `main`, si está activado: despliega por SSH en una VM.
 
-Despliegue en una VM de cualquier nube (GCP Compute Engine, AWS EC2, DigitalOcean…):
+### Despliegue en un VPS (Ubuntu/Debian, con HTTPS)
+
+`docker-compose.prod.yml` añade Caddy, que emite el certificado HTTPS solo y es lo único que publica puertos
+(80/443): `https://DOMAIN/api/*` va a Kong y el resto al frontend. Sin dominio propio se puede usar
+`<ip-con-guiones>.sslip.io` (p. ej. `169-58-188-130.sslip.io`).
 
 ```bash
-# En la VM (con Docker instalado)
-git clone <repo> ~/reto-qr && cd ~/reto-qr
-cp .env.example .env   # cambia TODOS los secretos, CORS_ORIGIN, PUBLIC_API_URL y define GHCR_OWNER
+# 1. En el VPS, como root: instala Docker, abre 22/80/443 y clona el repo en ~/reto-qr
+curl -fsSL https://raw.githubusercontent.com/<owner>/RETO_QR/main/deploy/bootstrap.sh -o bootstrap.sh
+bash bootstrap.sh https://github.com/<owner>/RETO_QR.git
+
+# 2. Configura los secretos (openssl rand -hex 32) y arranca
+cd ~/reto-qr && cp .env.prod.example .env && nano .env
+docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build --wait
+
+# 3. Copias diarias de PostgreSQL (deploy/backup.sh, 7 días en ./backups)
+bash deploy/install-backup-cron.sh
 ```
 
+Si los paquetes de GHCR son privados, haz antes `docker login ghcr.io` con un token `read:packages`
+(o vuélvelos públicos en GitHub → Packages).
+
 Para el despliegue automático, define en el repositorio la variable `DEPLOY_ENABLED=true`, la variable
-`PUBLIC_API_URL` (URL pública de Kong) y los secretos `DEPLOY_HOST`, `DEPLOY_USER` y `DEPLOY_SSH_KEY`.
-En producción, coloca delante un proxy con HTTPS (por ejemplo Caddy o el balanceador de la nube) y abre solo
-los puertos 80/443.
+`PUBLIC_API_URL` (la misma URL `https://DOMAIN` que en `.env`; se compila dentro del frontend), el entorno
+`production` y los secretos `DEPLOY_HOST`, `DEPLOY_USER` y `DEPLOY_SSH_KEY`.
 
 ## Desarrollo sin Docker
 
