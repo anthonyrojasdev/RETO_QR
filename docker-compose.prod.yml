@@ -1,16 +1,58 @@
-# Despliegue en la nube: usa las imágenes publicadas por CI en GHCR en lugar de compilar.
+# Despliegue en un VPS: usa las imágenes publicadas por CI en GHCR y pone Caddy delante con HTTPS.
 #
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build --wait
 #
-# Requiere en .env: GHCR_OWNER (usuario u organización de GitHub, en minúsculas).
+# Requiere en .env: GHCR_OWNER, DOMAIN, PUBLIC_API_URL y CORS_ORIGIN (ver .env.prod.example).
 # IMAGE_TAG elige la versión (por defecto latest; el pipeline usa el SHA del commit).
+#
+# Solo Caddy publica puertos (80/443). Kong y el frontend quedan en la red interna:
+#   https://DOMAIN/api/*  → Kong      https://DOMAIN/*  → frontend
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Define DOMAIN en .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # certificados: no borrar (límites de Let's Encrypt)
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      kong: { condition: service_healthy }
+      frontend: { condition: service_started }
+    logging: *logging
+    restart: unless-stopped
+
+  kong:
+    ports: !reset []
+    logging: *logging
   qr-api:
     image: ghcr.io/${GHCR_OWNER:?Define GHCR_OWNER en .env}/reto-qr-qr-api:${IMAGE_TAG:-latest}
+    logging: *logging
   stats-api:
     image: ghcr.io/${GHCR_OWNER}/reto-qr-stats-api:${IMAGE_TAG:-latest}
+    logging: *logging
   auth-api:
     image: ghcr.io/${GHCR_OWNER}/reto-qr-auth-api:${IMAGE_TAG:-latest}
+    logging: *logging
   frontend:
     image: ghcr.io/${GHCR_OWNER}/reto-qr-frontend:${IMAGE_TAG:-latest}
+    ports: !reset []
+    logging: *logging
+  postgres:
+    logging: *logging
+  redis:
+    logging: *logging
+
+volumes:
+  caddy-data:
+  caddy-config:
