@@ -1,0 +1,145 @@
+Registered S3 method overwritten by 'quantmod':
+  method            from
+  as.zoo.data.frame zoo 
+
+================ ETAPA 1: DATOS ================
+Serie                  : TC interbancario venta (S/ por US$) - BCRP PD04638PD
+Registros descargados  : 2054 
+Días 'n.d.' eliminados : 91 (feriados / sin negociación)
+Observaciones válidas  : 1963 
+Primera fecha          : 2019-01-02 
+Última fecha           : 2026-11-12 
+
+Primeras observaciones:
+       fecha   precio
+1 2019-01-02 3.371571
+2 2019-01-03 3.370143
+3 2019-01-04 3.355286
+4 2019-01-07 3.349857
+5 2019-01-08 3.349143
+6 2019-01-09 3.334286
+
+Últimas observaciones:
+          fecha   precio
+1958 2026-11-05 3.448714
+1959 2026-11-06 3.428571
+1960 2026-11-09 3.412143
+1961 2026-11-10 3.416214
+1962 2026-11-11 3.410857
+1963 2026-11-12 3.405857
+
+Retornos logarítmicos calculados: 1962 observaciones
+       fecha       retorno
+2 2019-01-03 -0.0004238007
+3 2019-01-04 -0.0044182068
+4 2019-01-07 -0.0016192265
+5 2019-01-08 -0.0002132514
+6 2019-01-09 -0.0044459718
+7 2019-01-10  0.0026101296
+
+========== ETAPA 2.1: ESTADÍSTICAS DESCRIPTIVAS ==========
+ Estadistico                             Valor               
+ N° de observaciones                     1962                
+ Media diaria                            0.000005 (0.0005%)  
+ Media anualizada (x252)                 0.1300%             
+ Mediana diaria                          0.000059 (0.0059%)  
+ Desv. estándar diaria                   0.004089 (0.4089%)  
+ Desv. estándar anualizada (x raiz(252)) 6.4913%             
+ Mínimo                                  -0.034815 (-3.4815%)
+ Fecha del mínimo                        2026-06-09          
+ Máximo                                  0.032976 (3.2976%)  
+ Fecha del máximo                        2021-07-30          
+ Rango (máx - mín)                       0.067791 (6.7791%)  
+ Asimetría                               -0.1403             
+ Curtosis (normal = 3)                   10.7447             
+ Jarque-Bera (p-valor)                   < 2.2e-16           
+
+Prueba t (H0: media = 0): t = 0.0559  p-valor = 0.9555 
+
+Resumen del tipo de cambio (nivel, S/ por US$):
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  3.284   3.414   3.663   3.633   3.781   4.138 
+
+Resumen anual:
+ Anio Obs TC_inicio TC_fin TC_min TC_max Ret_log_acum Vol_anualizada
+ 2019 249    3.3716 3.3146 3.2836 3.4057       -1.71%          4.15%
+ 2020 254    3.3031 3.6230 3.3031 3.6667        8.90%          6.59%
+ 2021 251    3.6267 3.9814 3.5967 4.1375        9.43%          8.87%
+ 2022 251    3.9888 3.8117 3.6305 4.0015       -4.36%          8.00%
+ 2023 250    3.8173 3.7098 3.5575 3.8990       -2.71%          5.65%
+ 2024 246    3.7340 3.7667 3.6670 3.8840        1.52%          5.50%
+ 2025 248    3.7542 3.3636 3.3594 3.7817      -11.32%          4.46%
+ 2026 214    3.3649 3.4059 3.3420 3.5300        1.25%          7.22%
+
+Los 10 movimientos diarios más extremos:
+      fecha retorno_pct
+ 2026-06-09     -3.481%
+ 2021-07-30      3.298%
+ 2021-06-07      2.684%
+ 2022-02-24      2.000%
+ 2020-03-26     -1.956%
+ 2022-04-05      1.851%
+ 2021-04-06     -1.784%
+ 2021-05-28     -1.782%
+ 2021-10-13     -1.697%
+ 2021-06-28     -1.669%
+
+---------- INTERPRETACIÓN 2.1 ----------
+* Media: el retorno logarítmico medio diario es 0.0005% (0.13% anual), prácticamente
+  cero; la prueba t (p = 0.955) no rechaza H0: la media no es distinta de cero. En promedio el sol se depreció levemente frente al dólar en el periodo.
+* Mediana: 0.0059%, mayor que la media (0.0005%); junto con la asimetría (-0.140)
+  indica que la distribución tiene una cola izquierda (apreciaciones bruscas del sol) algo más larga. Ambas son casi cero: el día típico
+  el tipo de cambio prácticamente no se mueve.
+* Volatilidad: la desviación estándar diaria es 0.4089% y la anualizada 6.49%.
+  Es un nivel bajo frente a acciones (20-30%) o a otras monedas emergentes,
+  coherente con la intervención cambiaria del BCRP que suaviza el tipo de cambio.
+* Rango: los retornos van de -3.481% (2026-06-09) a 3.298% (2021-07-30), un rango de 6.779%.
+  Estos extremos son 8.5 y 8.1 desviaciones estándar, valores que serían
+  casi imposibles bajo normalidad.
+* Forma: asimetría = -0.140 y curtosis = 10.74 (> 3): distribución leptocúrtica
+  con colas pesadas. Jarque-Bera p = <2e-16 => se rechaza normalidad. Esto justifica
+  usar luego una distribución t-Student en el GARCH (Etapa 5).
+
+========== ETAPA 2.2: EPISODIOS DE ALTA VOLATILIDAD ==========
+Umbral (percentil 90 de la vol. móvil 21d): 9.88% anual
+Meses con volatilidad promedio sobre el umbral:
+     mes  vol21
+ 2021-06 14.35%
+ 2021-08 12.93%
+ 2021-05 12.86%
+ 2022-03 11.94%
+ 2026-06 11.87%
+ 2020-04 11.35%
+ 2021-07 11.22%
+ 2021-04 10.64%
+ 2022-04 10.60%
+
+---------- INTERPRETACIÓN 2.2 ----------
+* Tendencias (Fig. 2.1): el tipo de cambio pasa de 3.372 (2019-01-02) a 3.406 (2026-11-12),
+  una variación acumulada de 1.02%. El mínimo del periodo fue 3.284 (2019-07-12) y el
+  máximo 4.138 (2021-09-30). La media móvil de 63 días muestra fases de depreciación y
+  apreciación del sol: la serie en niveles NO es estacionaria (tiene tendencia
+  estocástica), por eso se trabaja con retornos.
+* Retornos (Fig. 2.2): oscilan alrededor de cero sin tendencia (media constante),
+  pero su amplitud cambia en el tiempo: hay tramos tranquilos y tramos agitados.
+* Clustering (Figs. 2.3 y 2.4): la volatilidad móvil varía entre 0.90% y 16.61%
+  anual. Los periodos de alta volatilidad se agrupan (grandes cambios seguidos de
+  grandes cambios), lo que evidencia heterocedasticidad condicional (efecto ARCH).
+  Meses más volátiles: 2021-06, 2021-08, 2021-05, 2022-03, 2026-06, 2020-04.
+* Contexto de los episodios (verificar con las fechas impresas arriba):
+  - Mar-Abr 2020: inicio de la pandemia COVID-19 y cuarentena.
+  - Abr-Ago 2021: elecciones generales 2021 e incertidumbre política; el TC
+    alcanza su máximo histórico del periodo (sep-2021).
+  - Feb-Abr 2022: invasión de Rusia a Ucrania (24-feb-2022) y choque de materias primas.
+  - Jun 2026: segunda vuelta de las elecciones generales 2026.
+  - 2025: tramo de apreciación sostenida del sol (caída del TC de ~3.75 a ~3.36).
+* Implicancia para el modelado: media ≈ 0 y estable (adecuada para un ARMA de
+  bajo orden) + varianza cambiante y colas pesadas => se justifica un modelo
+  ARMA-GARCH con innovaciones t-Student en las etapas siguientes.
+
+Archivos generados en la carpeta 'salidas':
+[1] "consola_etapa1_2.txt"          "fig_2_1_precio.png"           
+[3] "fig_2_2_retornos.png"          "fig_2_3_volatilidad_movil.png"
+[5] "fig_2_4_panel.png"             "fig_2_5_histograma.png"       
+[7] "tabla_2_1_descriptivos.csv"    "tabla_2_1_resumen_anual.csv"  
+[9] "tc_precios_retornos.csv"      
