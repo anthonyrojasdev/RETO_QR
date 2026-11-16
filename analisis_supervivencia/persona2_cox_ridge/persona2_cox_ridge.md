@@ -8,7 +8,9 @@ El modelo de Cox tradicional estima los coeficientes β maximizando la verosimil
 - El número de covariables **p** es grande en relación con el número de eventos **d**, o p > d. La estimación de máxima verosimilitud deja de ser única o sobreajusta.
 - Se quiere **estabilizar** las predicciones para nuevos pacientes.
 
-La regularización añade a la verosimilitud un término que castiga coeficientes grandes. A cambio de un pequeño sesgo, se reduce mucho la varianza del estimador. Es el compromiso sesgo-varianza.
+La regularización añade a la verosimilitud un término que castiga coeficientes grandes. A cambio de un pequeño sesgo, se reduce mucho la varianza del estimador. Es el compromiso sesgo-varianza (Hastie, Tibshirani y Friedman, 2009, cap. 3).
+
+La idea de contraer los coeficientes para estabilizar estimaciones con predictores correlacionados se remonta a la regresión Ridge de Hoerl y Kennard (1970). Su extensión a modelos de supervivencia de Cox se estudia en Verweij y van Houwelingen (1993) y en Simon et al. (2011).
 
 ## 2. Verosimilitud parcial de Cox
 
@@ -18,7 +20,7 @@ $$
 h(t \mid x) = h_0(t)\,\exp(x^\top \beta),
 $$
 
-la verosimilitud parcial de Cox elimina el riesgo basal $h_0(t)$. Para cada tiempo de evento $t_i$ (con $\delta_i = 1$), el conjunto de riesgo $R_i = \{j : t_j \ge t_i\}$ contiene a los individuos que siguen en riesgo. Entonces
+la verosimilitud parcial de Cox (Cox, 1972, 1975) elimina el riesgo basal $h_0(t)$. Para cada tiempo de evento $t_i$ (con $\delta_i = 1$), el conjunto de riesgo $R_i = \{j : t_j \ge t_i\}$ contiene a los individuos que siguen en riesgo. Entonces
 
 $$
 PL(\beta) = \prod_{i:\,\delta_i=1} \frac{\exp(x_i^\top \beta)}{\sum_{j \in R_i} \exp(x_j^\top \beta)},
@@ -30,7 +32,7 @@ $$
 \ell(\beta) = \sum_{i:\,\delta_i=1} \Big[\, x_i^\top \beta - \log \sum_{j \in R_i} \exp(x_j^\top \beta) \Big].
 $$
 
-Para tiempos empatados se usa la aproximación de **Breslow** (es la que emplea `glmnet`; `coxph` la usa con `ties = "breslow"` para que la comparación sea directa).
+Para tiempos empatados se usa la aproximación de **Breslow** (Breslow, 1974; es la que emplea `glmnet`; `coxph` la usa con `ties = "breslow"` para que la comparación sea directa).
 
 ## 3. Verosimilitud penalizada con L2
 
@@ -51,7 +53,7 @@ $$
 - Este documento usa la forma con $n$ (la de la ecuación anterior), que es la que resulta de la verosimilitud sin normalizar.
 - `glmnet` minimiza $-\frac{1}{n}\ell(\beta) + \frac{\lambda}{2}\lVert\beta\rVert_2^2$. Son equivalentes con $\lambda_{\text{glmnet}} = \lambda$ y el término $n\lambda$ de arriba. Por eso en el script se usa `lambda_n = n_tr * lam`.
 
-Solo la penalización L2 (cuadrado de la norma) produce esta forma diferenciable y cerrada en el gradiente. La penalización L1 no es derivable en cero, y eso es lo que da lugar a LASSO (persona 3).
+Solo la penalización L2 (cuadrado de la norma) produce esta forma diferenciable y cerrada en el gradiente. La penalización L1 no es derivable en cero, y eso es lo que da lugar a LASSO (Tibshirani, 1997; persona 3).
 
 ## 4. Ecuaciones de estimación
 
@@ -100,7 +102,7 @@ que va de $p$ (en $\lambda = 0$) hacia 0 al aumentar λ. Es una forma de medir c
 
 ## 6. Selección de λ
 
-Se elige λ por **validación cruzada K-fold** (habitualmente K = 10), maximizando la verosimilitud parcial en los pliegues de validación (devianza parcial). Dos reglas comunes:
+Se elige λ por **validación cruzada K-fold** (habitualmente K = 10), maximizando la verosimilitud parcial en los pliegues de validación (devianza parcial). La validación cruzada en modelos de supervivencia, con sus particularidades por la censura, se trata en Verweij y van Houwelingen (1993); la implementación de rutas de regularización con `glmnet` está en Friedman, Hastie y Tibshirani (2010) y Simon et al. (2011). Dos reglas comunes:
 
 - **λ mínimo** (`lambda.min`): el de mejor ajuste en CV.
 - **λ 1-EE** (`lambda.1se`): el mayor λ con devianza a 1 error estándar del mínimo. Da un modelo más contraído y más simple. Es preferible cuando se busca estabilidad.
@@ -129,7 +131,7 @@ Ridge no es invariante a escala: una covariable medida en gramos recibe una pena
 
 - **No selecciona variables**: los coeficientes se contraen pero no llegan a exactamente 0. Si se necesita un modelo parsimonioso, hay que usar LASSO o Elastic Net.
 - **Sesgo**: los coeficientes son sesgados hacia 0. La interpretación como HR debe hacerse con cuidado.
-- **Inferencia no estándar**: no hay errores estándar ni p-valores directos del estimador penalizado. Para intervalos de confianza se recomiendan bootstrap o la aproximación bayesiana.
+- **Inferencia no estándar**: no hay errores estándar ni p-valores directos del estimador penalizado. Para intervalos de confianza se recomiendan bootstrap o la aproximación bayesiana (Therneau y Grambsch, 2000).
 - **Depende de la escala** y necesita estandarizar.
 - **Una sola λ** para todos los coeficientes: penaliza igual a covariables relevantes e irrelevantes.
 - **Dependencia de la partición**: la elección de λ y la estimación del error de predicción varían con la semilla de CV. Conviene repetir la CV con varias semillas.
@@ -143,7 +145,7 @@ El script `persona2_cox_ridge.R` (en esta misma carpeta) realiza:
 3. **Ruta de coeficientes**: `glmnet(..., family = "cox", alpha = 0)`.
 4. **Selección de λ**: `cv.glmnet(..., nfolds = 10)`, con `lambda.min` y `lambda.1se`.
 5. **Coeficientes y HR** por 1 DE para Cox y Cox-Ridge.
-6. **C-index en prueba** con una función propia de Harrell's C, para no depender de la convención de signo de `concordance()`.
+6. **C-index en prueba** con una función propia del C de Harrell (Harrell et al., 1982), para no depender de la convención de signo de `concordance()`.
 7. **Verificación**: un Newton-Raphson penalizado escrito a mano. Con λ = 0 reproduce `coxph`; con λ > 0 reproduce `glmnet` hasta la tolerancia numérica.
 8. **Grados de libertad efectivos** $\mathrm{df}(\lambda)$.
 
@@ -167,6 +169,32 @@ El script `persona2_cox_ridge.R` (en esta misma carpeta) realiza:
 
 ## 11. Conclusiones preliminares para la persona 5
 
+*(Ver sección 12 para las referencias.)*
+
 - Ridge conserva todas las covariables y reduce la varianza; sirve como referencia de penalización continua.
 - La decisión entre Ridge, LASSO y Elastic Net depende de si se necesita selección de variables (LASSO/Elastic Net) o de la estabilidad con colinealidad fuerte (Ridge).
 - Para comparar modelos conviene usar la misma partición train/test y la misma semilla de CV.
+
+## 12. Referencias
+
+Breslow, N. E. (1974). Covariance analysis of censored survival data. *Biometrics, 30*(1), 89–99.
+
+Cox, D. R. (1972). Regression models and life-tables. *Journal of the Royal Statistical Society: Series B, 34*(2), 187–220.
+
+Cox, D. R. (1975). Partial likelihood. *Biometrika, 62*(2), 269–276.
+
+Friedman, J., Hastie, T., y Tibshirani, R. (2010). Regularization paths for generalized linear models via coordinate descent. *Journal of Statistical Software, 33*(1), 1–22.
+
+Harrell, F. E., Jr., Califf, R. M., Pryor, D. B., Lee, K. L., y Rosati, R. A. (1982). Evaluating the yield of medical tests. *JAMA, 247*(18), 2543–2546.
+
+Hastie, T., Tibshirani, R., y Friedman, J. (2009). *The elements of statistical learning: Data mining, inference, and prediction* (2.ª ed.). Springer.
+
+Hoerl, A. E., y Kennard, R. W. (1970). Ridge regression: Biased estimation for nonorthogonal problems. *Technometrics, 12*(1), 55–67.
+
+Simon, N., Friedman, J., Hastie, T., y Tibshirani, R. (2011). Regularization paths for Cox's proportional hazards model via coordinate descent. *Journal of Statistical Software, 39*(5), 1–13.
+
+Therneau, T. M., y Grambsch, P. M. (2000). *Modeling survival data: Extending the Cox model*. Springer.
+
+Tibshirani, R. (1997). The lasso method for variable selection in the Cox model. *Statistics in Medicine, 16*(4), 385–395.
+
+Verweij, P. J. M., y van Houwelingen, H. C. (1993). Cross-validation in survival analysis. *Statistics in Medicine, 12*(24), 2305–2314.
